@@ -1,13 +1,6 @@
 defmodule MsprSolve do
   @moduledoc """
-  Documentation for `MsprSolve`.
-
-  Field represented as tuple of integers.
-  -1 represents an unexplored space.
-  -2 represents a flag.
-  -3 represents an intended exploration.
-  Other values represent the revealed number of adjacent bombs.
-  eg. { {-1, -1, 1 }, {-1, -1, 1}, {-1, 2, 0} }
+  Board solving.
   """
   import MsprGen
   import Ntup
@@ -15,6 +8,11 @@ defmodule MsprSolve do
 
   @doc """
   Full search strategy. Encompasses standard searches, count searches, and exhaustive probability searches.
+
+  `field` is the n-tuple field being examined.
+  `num` is the number of mines remaining on the board.
+
+  Returns a list of actions to be applied.
   """
   def solve(field, num) do
     st = stsearch_loop(field)
@@ -33,6 +31,11 @@ defmodule MsprSolve do
 
   @doc """
   Overall count search. If no bombs remain, explore all unexplored. If only bombs remain, flag everything.
+
+  `field` is the n-tuple field being examined.
+  `num` is the number of mines remaining on the board.
+
+  Returns a list of actions to be applied.
   """
   def cosearch(field, 0), do: get_all_unexplored(field) |> Enum.map(fn x -> {:explore, x} end)
   def cosearch(field, num), do: cosearch(field, num, count(field, all_perms(field)))
@@ -41,6 +44,10 @@ defmodule MsprSolve do
 
   @doc """
   Perform standard searches until no futher modifications possible.
+
+  `field` is the n-tuple field being examined.
+
+  Returns a list of actions to be applied.
   """
   def stsearch_loop(field), do: stsearch_loop(field, stsearch(field), [])
   defp stsearch_loop(_, [], res), do: res
@@ -51,6 +58,13 @@ defmodule MsprSolve do
 
   @doc """
   Write actions to field.
+
+  `write_acts(field, acts)`
+
+  `field` is the n-tuple field being written to.
+  `acts` is a list of actions to apply to the field.
+
+  Returns an updated n-tuple field.
   """
   def write_acts(field, []), do: field
   def write_acts(field, [{:explore, x} | tflags]), do: write_acts(ntup_put_elem(field, x, -3), tflags)
@@ -59,9 +73,12 @@ defmodule MsprSolve do
 
   @doc """
   Standard search the field for any appropriate actions.
+
+  `field` is the n-tuple field being examined.
+
+  Returns a list of actions to be applied.
   """
   def stsearch(field) do
-    #parent = self()
     perm_list = all_perms(field)
     perm_list |> Stream.map(fn x -> {check(field, x), x} end)
               |> Stream.flat_map(fn {mark, pos} -> mark_surr(field, pos, mark) end)
@@ -81,12 +98,23 @@ defmodule MsprSolve do
 
   @doc """
   Mark surrounding positions with specified mark.
+
+  `field` is the n-tuple field being examined.
+  `pos` is the position to check around.
+  `mark` is the mark to be applied to surrounding unexplored spaces.
+
+  Returns a list of actions to be applied.
   """
   def mark_surr(_, _, :nil), do: []
   def mark_surr(field, pos, mark), do: field |> get_unexplored(pos) |> Enum.map(fn pos -> {mark, pos} end)
 
   @doc """
   Check for appropriate actions at a specified field location by examining adjacent positions.
+
+  `field` is the n-tuple field being examined.
+  `pos` is the position to check around.
+
+  Returns one among `:nil`, `:explore`, or `:flag`.
   """
   def check(field, pos), do: check_res(count_around(field, pos), ntup_elem(field, pos))
   defp check_res({_,0,_}, _), do: :nil # No unexplored positions
@@ -95,7 +123,12 @@ defmodule MsprSolve do
   defp check_res(_, _), do: :nil # No new information
 
   @doc """
-  Probability-based search for best move.
+  Exhaustive probability search for best move.
+
+  `field` is the n-tuple field being examined.
+  `num` is the number of mines remaining on the board.
+
+  Returns a list of best actions to be taken.
   """
   def prsearch(field, num) do
     perim = field |> perimeter
@@ -116,6 +149,12 @@ defmodule MsprSolve do
 
   @doc """
   Calculate probability of unexplored space being a mine using current clues.
+
+  `field` is the n-tuple field being examined.
+  `num` is the number of mines remaining on the board.
+  `perim` is the unexplored perimeter of the explored board sections.
+
+  Returns a list containing the probabilities for each position formed as tuples of {probability, position}.
   """
   def prob(field, num, perim) do
     empty = get_all_unexplored(field) |> Enum.filter(fn x -> x not in perim end) |> length
@@ -139,6 +178,12 @@ defmodule MsprSolve do
 
   @doc """ 
   Generate possible solutions.
+
+  `field` is the n-tuple field being examined.
+  `num` is the number of mines remaining on the board.
+  `perim` is the unexplored perimeter of the explored board sections.
+
+  Returns a list of all valid solutions represented as lists of actions to be applied.
   """
   def gen_sols(field, num, perim) do
     pid = self()
@@ -198,6 +243,10 @@ defmodule MsprSolve do
 
   @doc """
   Test if the provided field is a valid state.
+
+  `field` is the n-tuple field being examined.
+
+  Returns true if all explored spaces are surrounded by an exact or lesser number of mines.
   """
   def valid_board?(field), do: valid_board?(field, all_perms(field), true)
   defp valid_board?(_, _, false), do: false
@@ -215,6 +264,10 @@ defmodule MsprSolve do
 
   @doc """
   Test if the provided field is a strictly solved valid state.
+
+  `field` is the n-tuple field being examined.
+
+  Returns true if all explored spaces are surrounded by the exact number of mines.
   """
   def valid_board_strict?(field), do: valid_board_strict?(field, all_perms(field), true)
   defp valid_board_strict?(_, _, false), do: false

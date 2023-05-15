@@ -1,22 +1,35 @@
 defmodule MsprGen do
   @moduledoc """
-  Documentation for `MsprGen`.
+  General functions.
   """
   import Ntup
 
   @doc """
-  Generate all permutations of field positions
+  Generate all permutations of field positions.
+
+  `field` is the n-tuple field being examined.
+
+  Returns a list of position tuples to access all positions.
   """
   def all_perms(field), do: gen_perm(List.to_tuple(for n <- ntup_dim(field), do: List.to_tuple(Enum.to_list(0..(n-1)))))
 
   @doc """
   Count elements of each type around specified field location.
-  Formatted as numbers of {flags, unexplored, empty}.
+
+  `field` is the n-tuple field being examined.
+  `pos` is the position to be examined around.
+
+  Returns a tuple formatted as the numbers of {flags, unexplored, empty}.
   """
   def count_around(field, pos), do: count(field, valid_indices(field, pos) |> gen_perm |> List.delete(pos))
 
   @doc """
   Count values at set of indices.
+
+  `field` is the n-tuple field being examined.
+  `indices` is a list of positions at which counts should be tallied
+
+  Returns a tuple formatted as the numbers of {flags, unexplored, empty}.
   """
   def count(field, indices), do: count(field, indices, {0, 0, 0})
   defp count(_, [], res), do: res
@@ -24,15 +37,25 @@ defmodule MsprGen do
 
   @doc """
   Update count of area according to discovered element.
-  Formatted as numbers of {flags, unexplored, empty}.
+
+  `update_count(val, count)`
+
+  `val` is the element under examination.
+  `count` is the current count similar elements.
+
+  Returns a tuple formatted as the numbers of {flags, unexplored, empty}.
   """
-  def update_count(-2, count), do: put_elem(count, 0, elem(count,0)+1)
-  def update_count(-1, count), do: put_elem(count, 1, elem(count,1)+1)
-  def update_count(true, count), do: put_elem(count, 0, elem(count,0)+1)
-  def update_count( _, count), do: put_elem(count, 2, elem(count,2)+1)
+  def update_count(-2, {flags, unexplored, empty}), do: {flags+1, unexplored, empty}
+  def update_count(-1, {flags, unexplored, empty}), do: {flags, unexplored+1, empty}
+  def update_count(true, {flags, unexplored, empty}), do: {flags+1, unexplored, empty}
+  def update_count(_val, {flags, unexplored, empty}), do: {flags, unexplored, empty+1}
   
   @doc """
   Generates permutations of valid field indices.
+
+  `indices` is a tuple containing tuples of positions to generate permutations from.
+
+  Returns a list of all permutations of `indices`
   """
   def gen_perm(indices), do: gen_perm(Tuple.delete_at(indices,0), (for n <- Tuple.to_list(elem(indices,0)), do: {n} ))
   defp gen_perm({}, res), do: res
@@ -40,11 +63,21 @@ defmodule MsprGen do
 
   @doc """
   Generate permutations examining single pair of results and new coordinates.
+
+  `a` is the tuple of valid indices.
+  `b` is a list all existing permutations.
+
+  Returns a list of all permutations of `a` with `b`.
   """
   def list_map(a, b), do: Enum.flat_map(b, fn x -> for n <- Tuple.to_list(a), do: Tuple.append(x,n) end)
 
   @doc """
-  Determine valid indices for position in a field.
+  Determine valid indices for neighbours of position in a field.
+
+  `field` is the n-tuple field being examined.
+  `pos` is the position to be examined around.
+
+  Returns a tuple of tuples containing all valid indices in neighbourhood of `pos` in each dimension.
   """
   def valid_indices(field, pos), do: valid_indices(field, pos, {})
   defp valid_indices(_, {}, res), do: res
@@ -64,6 +97,11 @@ defmodule MsprGen do
 
   @doc """
   Determines linear position equivalent of n-tuple field.
+
+  `dim` is a tuple representing the dimensions of the boards to be tested.
+  `pos` is the position to be found.
+
+  Returns an integer for the linear position.
   """
   def lin_pos(dim, pos), do: lin_pos(dim, pos, 0)
   defp lin_pos({}, _, res), do: res
@@ -74,6 +112,11 @@ defmodule MsprGen do
 
   @doc """
   Shape a linear board to specified dimensions.
+
+  `lin` is a linear tuple board.
+  `dim` is the desired dimensions of the n-tuple board.
+
+  Returns an n-tuple board shaped in the specified dimensions.
   """
   def shape_board(lin, dim), do: shape_board(rev_tup(dim), lin, [])
   defp shape_board({}, pile, _), do: hd pile
@@ -82,6 +125,10 @@ defmodule MsprGen do
 
   @doc """
   Reverse order of tuple.
+
+  `tup` is the tuple to be reversed.
+
+  Returns `tup` reversed.
   """
   def rev_tup({}), do: {}
   def rev_tup(tup), do: rev_tup(Tuple.delete_at(tup, 0), {elem(tup, 0)})
@@ -89,45 +136,56 @@ defmodule MsprGen do
   defp rev_tup(tup, res), do: rev_tup(Tuple.delete_at(tup, 0), Tuple.insert_at(res, 0, elem(tup, 0)))
 
   @doc """
-  List unexplored tiles around position
+  List unexplored tiles around position.
+
+  `field` is the n-tuple field being examined.
+  `pos` is the position to be examined around.
+
+  Returns a list of tuples representing all unexplored positions around `pos`.
   """
   def get_unexplored(field, pos), do: valid_indices(field, pos)
                                         |> gen_perm
                                         |> List.delete(pos)
                                         |> Enum.map(fn x -> 
-                                               case ntup_elem(field, x) do
-                                                 -1 -> x
-                                                 _  -> :nil
-                                               end
-                                             end)
+                                                      case ntup_elem(field, x) do
+                                                        -1 -> x
+                                                        _  -> :nil
+                                                      end
+                                                    end)
                                         |> Enum.reduce([], fn
-                                               :nil, acc -> acc
-                                               x, acc    -> [x | acc]
-                                             end)
-                                        |> Enum.reverse()
+                                                             :nil, acc -> acc
+                                                             x, acc    -> [x | acc]
+                                                           end)
 
   @doc """
   List all unexplored tiles.
-  """
-  def get_all_unexplored(field) do
-    all_perms(field)
-      |> Enum.map(fn x -> 
-           case ntup_elem(field, x) do
-             -1 -> x
-             _  -> :nil
-           end
-         end)
-      |> Enum.reduce([], fn
-           :nil, acc -> acc
-           x, acc    -> [x | acc]
-         end)
-  end   
+  
+  `field` is the n-tuple field being examined.
 
-  def perimeter(field) do
-    all_perms(field)
-      |> Enum.filter(fn x -> ntup_elem(field, x) >= 0 end) # Not unexplored or flagged
-      |> Enum.flat_map(fn x -> get_unexplored(field, x) end) # Unexplored around position
-      |> MapSet.new # Reduce to set
-      |> MapSet.to_list
-  end
+  Returns a list of tuples representing all unexplored positions.
+  """
+  def get_all_unexplored(field), do: all_perms(field)
+                                       |> Enum.map(fn x -> 
+                                                     case ntup_elem(field, x) do
+                                                       -1 -> x
+                                                       _  -> :nil
+                                                     end
+                                                   end)
+                                       |> Enum.reduce([], fn
+                                                            :nil, acc -> acc
+                                                            x, acc    -> [x | acc]
+                                                          end)
+
+  @doc """
+  Finds the unexplored perimeter of all explored areas of a field.
+
+  `field` is the n-tuple field being examined.
+
+  Returns a list of tuples representing all perimeter positions.
+  """
+  def perimeter(field), do: all_perms(field)
+                              |> Enum.filter(fn x -> ntup_elem(field, x) >= 0 end) # Not unexplored or flagged
+                              |> Enum.flat_map(fn x -> get_unexplored(field, x) end) # Unexplored around position
+                              |> Enum.sort
+                              |> Enum.dedup
 end

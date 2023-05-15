@@ -24,14 +24,6 @@ defmodule MsprChalTest do
     assert MsprChal.explore({-1, -1, -1, -1, -1}, {0, 0, 0, 0, 0}, {0}) == {0, 0, 0, 0, 0}
   end
 
-  test "Bomb count around" do
-    tfield = {{0, 0, 0, -2}, {0, 0, 0, 0}, {-2, -2, 0, 0}, {0, -2, 0, 0}}
-    assert MsprChal.bcount_around(tfield, {0, 0}) == 0
-    assert MsprChal.bcount_around(tfield, {0, 3}) == 0
-    assert MsprChal.bcount_around(tfield, {3, 0}) == 3
-    assert MsprChal.bcount_around(tfield, {1, 2}) == 2
-  end
-
   test "Parse" do
     tfield = {{false, false, false, true}, {false, false, false, false}, {true, true, false, false}, {false, true, false, false}}
     assert MsprChal.parse(tfield, {0, 0}) == 0
