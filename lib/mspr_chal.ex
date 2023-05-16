@@ -68,10 +68,10 @@ defmodule MsprChal do
     t = MapSet.delete(pos, h)
     val = ntup_elem(ref, h)
 
-    if val == 0 do # Explore all spaces around if the present position has zero bombs around.
-      explore(ntup_put_elem(board, h, val), ref, MapSet.union(t, MapSet.difference(MapSet.new(valid_indices(board, h) |> gen_perm |> List.delete(h)), explored)), MapSet.put(explored, h))
-    else
-      explore(ntup_put_elem(board, h, val), ref, t, MapSet.put(explored, h))
+    cond do # Explore all spaces around if the present position has zero bombs around.
+      val == 0 -> explore(ntup_put_elem(board, h, val), ref, MapSet.union(t, MapSet.difference(MapSet.new(valid_indices(board, h) |> gen_perm |> List.delete(h)), explored)), MapSet.put(explored, h))
+      ntup_elem(board, h) == -1 -> explore(ntup_put_elem(board, h, val), ref, t, MapSet.put(explored, h))
+      true -> explore(board, ref, t, MapSet.put(explored, h))
     end
   end
 
@@ -141,10 +141,10 @@ defmodule MsprChal do
   Returns an n-tuple board with all actions taken.
   """
   def apply_acts(field, ref, acts), do: field
+                                          |> write_flags(acts)
                                           |> explore(ref, acts 
                                                             |> Enum.filter(fn x -> elem(x, 0) == :explore end)
                                                             |> Enum.map(fn x -> elem(x, 1) end))
-                                          |> write_flags(acts)
 
   @doc """
   Applies all flags in a list of actions to provided board.
