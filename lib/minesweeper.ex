@@ -80,13 +80,13 @@ defmodule Minesweeper do
 
   Returns a tuple of the form {wins, losses}.
   """
-  def test_solve_seq(dim, num, count, verbose \\ false), do: test_solve_seq(dim, num, count, {0, 0}, verbose)
-  defp test_solve_seq(_, _, 0, res, _), do: res # Return result when all tests completed.
-  defp test_solve_seq(dim, num, count, {win, loss}, verbose) do
-    chal_serv_nomod(self(), dim, num, verbose) # Run challenge
+  def test_solve_seq(dim, num, count, verbose \\ false, proc_limit \\ -1), do: test_solve_seq(dim, num, count, {0, 0}, verbose, proc_limit)
+  defp test_solve_seq(_, _, 0, res, _, _), do: res # Return result when all tests completed.
+  defp test_solve_seq(dim, num, count, {win, loss}, verbose, proc_limit) do
+    chal_serv_nomod(self(), dim, num, verbose, proc_limit) # Run challenge
     receive do # Update results, and proceed with testing
-      :success -> test_solve_seq(dim, num, count-1, {win+1, loss}, verbose)
-      :failure -> test_solve_seq(dim, num, count-1, {win, loss+1}, verbose)
+      :success -> test_solve_seq(dim, num, count-1, {win+1, loss}, verbose, proc_limit)
+      :failure -> test_solve_seq(dim, num, count-1, {win, loss+1}, verbose, proc_limit)
     end
   end
 
@@ -100,31 +100,32 @@ defmodule Minesweeper do
 
   Returns either `:success` or `:failure` depending on the results of the test.
   """
-  def chal_serv_nomod(parent, dim, num, verbose) do
+  def chal_serv_nomod(parent, dim, num, verbose, proc_limit \\ -1) do
     {b, f} = gen_chal(dim, num) # Generate challenge board, and accompanying reference
-    chal_serv_nomod(parent, b, f, num, [{:nil, {}}], verbose)  # Begin with no initial actions
+    chal_serv_nomod(parent, b, f, num, [{:nil, {}}], verbose, proc_limit)  # Begin with no initial actions
   end
-  defp chal_serv_nomod(parent, _, _, _, [], verbose) do # No actions take on previous step
+  defp chal_serv_nomod(parent, _, _, _, [], verbose, _) do # No actions take on previous step
     if verbose, do: IO.inspect("Stuck")
     send(parent, :failure) # Got stuck
   end
-  defp chal_serv_nomod(parent, _, _, _, [[:error]], verbose) do # No valid action discovered
+  defp chal_serv_nomod(parent, _, _, _, [[:error]], verbose, _) do # No valid action discovered
     if verbose, do: IO.inspect("Search Error")
     send(parent, :failure) # Can't find valid solution
   end
-  defp chal_serv_nomod(parent, ref, field, num, acts, verbose) do
+  defp chal_serv_nomod(parent, ref, field, num, acts, verbose, proc_limit) do
     if safe_acts?(ref, acts) do # Only proceed if no bomb has been explored
       if solved?(field |> apply_acts(ref, acts), ref) do # Stop if board is solved
         if verbose, do: IO.inspect("Success")
         send(parent, :success)
       else # Unsolved, continue search
-        n_acts = solve(field |> apply_acts(ref, acts), num) # Find new actions
+        n_acts = solve(field |> apply_acts(ref, acts), num, proc_limit) # Find new actions
         chal_serv_nomod(parent,
                         ref,
                         field, # Apply actions to field
                         num - (n_acts |> Enum.count(fn x -> elem(x, 0) == :flag end)), # Remove new mine explorations
                         n_acts ++ acts,
-                        verbose) 
+                        verbose,
+                        proc_limit) 
       end
     else # Game loss on unsafe move
       if verbose, do: IO.inspect("Explored Bomb")

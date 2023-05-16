@@ -35,6 +35,7 @@ defmodule MsprSolveTest do
   test "prsearch" do
     tfield = {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, 1, -1, -1, -1}, {-1, -1, 3, 2, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}}
     assert hd(MsprSolve.prsearch(tfield, 11)) in [{:explore, {1, 1}}, {:explore, {1, 2}}, {:explore, {1, 3}}]
+    assert hd(MsprSolve.prsearch(tfield, 11, 1)) in [{:explore, {1, 1}}, {:explore, {1, 2}}, {:explore, {1, 3}}]
   end
 
   test "Solution Generation" do
