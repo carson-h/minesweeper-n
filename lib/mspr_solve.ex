@@ -5,6 +5,7 @@ defmodule MsprSolve do
   import MsprGen
   import Ntup
   import Statistics.Math
+  import WorkServer
 
   @doc """
   Full search strategy. Encompasses standard searches, count searches, and exhaustive probability searches.
@@ -14,12 +15,12 @@ defmodule MsprSolve do
 
   Returns a list of actions to be applied.
   """
-  def solve(field, num) do
+  def solve(field, num, proc_limit \\ -1) do
     st = stsearch_loop(field)
     if st == [] do
       co = cosearch(field, num)
       if co == [] do
-        prsearch(field, num)
+        prsearch(field, num, proc_limit)
       else
         co
       end
@@ -85,16 +86,6 @@ defmodule MsprSolve do
               |> Enum.sort
               |> Enum.dedup
   end
-  """
-  defp stsearch(_, 0, res), do: res
-  defp stsearch(field, n, res) do
-    receive do
-      {:nil, _x} -> stsearch(field, n-1,res)
-      {:explore, x} -> stsearch(field, n-1, res ++ mark_surr(field, x, :explore))
-      {:flag, x} -> stsearch(field, n-1, res ++ mark_surr(field, x, :flag))
-    end
-  end
-  """
 
   @doc """
   Mark surrounding positions with specified mark.
@@ -130,10 +121,10 @@ defmodule MsprSolve do
 
   Returns a list of best actions to be taken.
   """
-  def prsearch(field, num) do
+  def prsearch(field, num, proc_limit \\ -1) do
     perim = field |> perimeter
     if perim != [] do
-      pri = prob(field, num, perim)
+      pri = prob(field, num, perim, proc_limit)
               |> Enum.sort_by(fn x -> elem(x, 0) end)
       safe = Enum.take_while(pri, fn x -> elem(x, 0) == 0 end)
       unsafe = Enum.take_while(Enum.reverse(pri), fn x -> elem(x, 0) == 1 end)
@@ -153,20 +144,28 @@ defmodule MsprSolve do
   `field` is the n-tuple field being examined.
   `num` is the number of mines remaining on the board.
   `perim` is the unexplored perimeter of the explored board sections.
+  `proc_limit` is the number 
 
   Returns a list containing the probabilities for each position formed as tuples of {probability, position}.
   """
-  def prob(field, num, perim) do
-    empty = get_all_unexplored(field) |> Enum.filter(fn x -> x not in perim end) |> length
+  def prob(field, num, perim, proc_limit \\ -1) do
+    empty = get_all_unexplored(field)
+              |> Enum.count(fn x -> x not in perim end)
     # Only take solutions where there aren't too many bombs, and there aren't fewer bombs remaining than empty spaces remaining
-    sols = gen_sols(field, num, perim) |> Enum.filter(fn x -> length(x) <= num and num-length(x) <= empty end)
-    total = Enum.reduce(sols, 0, fn x, acc -> combination(empty, num-length(x)) + acc end)
-    prob(sols, empty, num, perim, [])
-      |> Enum.reverse
-      |> Enum.map(fn x -> x / total end)
-      |> Enum.zip(perim)
+    sols = (cond do
+              proc_limit < 1 -> gen_sols(field, num, perim)
+              true -> gen_sols_serv(field, num, empty, perim, proc_limit)
+            end)
+              |> Enum.filter(fn x -> length(x) <= num and num-length(x) <= empty end)
+    # Total number of arrangements
+    case Enum.reduce(sols, 0, fn x, acc -> combination(empty, num-length(x)) + acc end) do
+      0 -> []
+      total -> prob(sols, empty, num, perim, [])
+                 |> Enum.map(fn x -> x / total end)
+                 |> Enum.zip(perim)
+    end
   end
-  defp prob(_, _, _, [], res), do: res
+  defp prob(_, _, _, [], res), do: Enum.reverse(res)
   defp prob(sols, empty, num, [h | tperim], res) do
     prob(sols,
          empty,
@@ -279,5 +278,32 @@ defmodule MsprSolve do
                          ntup_elem(field, h) < 0 -> true
                          true -> ntup_elem(field, h) == (count_around(field, h) |> elem(0))
                        end)
+  end
+
+  def gen_sols_serv(field, num, empty, perim, proc_limit) do
+    run_task(fn x -> serv_sol_gen(field, num, empty, perim, x) end, [[]], proc_limit)
+  end
+
+  defp serv_sol_gen(field, num, empty, perim, acts) do
+    if valid_board?(field |> write_acts(acts)) and num >= (acts |> Enum.count(fn x -> elem(x, 0) == :flag end)) do
+      n_acts = stsearch_loop(field |> write_acts(acts)) ++ acts
+      used_pos = Enum.map(n_acts, fn x -> elem(x, 1) end)
+      n_perim = Enum.filter(perim, fn x -> x not in used_pos end)
+      if n_perim == [] do  # Valid solution, return list of bomb positions
+        if field |> write_acts(n_acts) |> valid_board_strict? do
+          {n_acts
+              |> Enum.filter(fn x -> elem(x, 0) == :flag end)
+              |> Enum.map(fn x -> elem(x, 1) end)
+              |> Enum.sort,
+           []}
+        else
+          {:error, []}
+        end
+      else
+        {:cont, [[{:flag, hd n_perim} | n_acts], [{:explore, hd n_perim} | n_acts]]}
+      end
+    else
+      {:error, []}
+    end
   end
 end
