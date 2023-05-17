@@ -124,15 +124,19 @@ defmodule MsprSolve do
   def prsearch(field, num, proc_limit \\ -1) do
     perim = field |> perimeter
     if perim != [] do
-      pri = prob(field, num, perim, proc_limit)
-              |> Enum.sort_by(fn x -> elem(x, 0) end)
-      safe = Enum.take_while(pri, fn x -> elem(x, 0) == 0 end)
-      unsafe = Enum.take_while(Enum.reverse(pri), fn x -> elem(x, 0) == 1 end)
-      exp = case safe do
-        [] -> [Enum.take_while(pri, fn x -> elem(x, 0) == elem(hd(pri), 0) and elem(x, 0) != 1 end) |> Enum.random |> elem(1)]
-        _ -> safe |> Enum.map(fn x -> elem(x, 1) end)
+      {pri, exp_ext} = prob(field, num, perim, proc_limit) 
+      if pri == [] do
+        []
+      else
+        safe = Enum.take_while(pri, fn x -> elem(x, 0) == 0 end)
+        unsafe = Enum.take_while(Enum.reverse(pri), fn x -> elem(x, 0) == 1 end)
+        exp = cond do
+          exp_ext < elem(hd(pri), 0) and exp_ext >= 0 -> [get_all_unexplored(field) |> Enum.random]
+          safe == [] -> [Enum.take_while(pri, fn x -> elem(x, 0) == elem(hd(pri), 0) and elem(x, 0) != 1 end) |> Enum.random |> elem(1)]
+          true -> safe |> Enum.map(fn x -> elem(x, 1) end)
+        end
+        Enum.map(exp, fn x -> {:explore, x} end) ++ Enum.map(unsafe, fn x -> {:flag, elem(x, 1)} end)
       end
-      Enum.map(exp, fn x -> {:explore, x} end) ++ Enum.map(unsafe, fn x -> {:flag, elem(x, 1)} end)
     else
       [{:explore, get_all_unexplored(field) |> Enum.random}]
     end
@@ -157,12 +161,18 @@ defmodule MsprSolve do
               true -> gen_sols_serv(field, num, empty, perim, proc_limit)
             end)
               |> Enum.filter(fn x -> length(x) <= num and num-length(x) <= empty end)
+    exp_ext = case empty do
+                0 -> -1
+                _ -> Enum.reduce(sols, 0, fn x, acc -> acc + (num-length(x))/empty*combination(empty, num-length(x)) end)
+              end
     # Total number of arrangements
     case Enum.reduce(sols, 0, fn x, acc -> combination(empty, num-length(x)) + acc end) do
-      0 -> []
-      total -> prob(sols, empty, num, perim, [])
-                 |> Enum.map(fn x -> x / total end)
-                 |> Enum.zip(perim)
+      0 -> {[], 0}
+      total -> {prob(sols, empty, num, perim, [])
+                  |> Enum.map(fn x -> x / total end)
+                  |> Enum.zip(perim)
+                  |> Enum.sort_by(fn x -> elem(x, 0) end),
+                exp_ext/total}
     end
   end
   defp prob(_, _, _, [], res), do: Enum.reverse(res)
