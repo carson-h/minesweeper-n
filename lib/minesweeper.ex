@@ -105,30 +105,32 @@ defmodule Minesweeper do
     chal_serv_nomod(parent, b, f, num, [{:nil, {}}], proc_limit, verbose)  # Begin with no initial actions
   end
   defp chal_serv_nomod(parent, _, _, _, [], _, verbose) do # No actions take on previous step
-    if verbose, do: IO.inspect("Stuck")
+    if verbose, do: IO.puts("Stuck")
     send(parent, :failure) # Got stuck
   end
   defp chal_serv_nomod(parent, _, _, _, [[:error]], _, verbose) do # No valid action discovered
-    if verbose, do: IO.inspect("Search Error")
+    if verbose, do: IO.puts("Search Error")
     send(parent, :failure) # Can't find valid solution
   end
   defp chal_serv_nomod(parent, ref, field, num, acts, proc_limit, verbose) do
     if safe_acts?(ref, acts) do # Only proceed if no bomb has been explored
       if solved?(field |> apply_acts(ref, acts), ref) do # Stop if board is solved
-        if verbose, do: IO.inspect("Success")
+        if verbose, do: IO.puts("Success")
         send(parent, :success)
       else # Unsolved, continue search
         n_acts = solve(field |> apply_acts(ref, acts), num, proc_limit) # Find new actions
+        num_rem = num - (n_acts |> Enum.count(fn x -> elem(x, 0) == :flag end)) # Remove new mine explorations
+        if verbose, do: IO.puts("Continuing Search: (#{num_rem} mine[s] remaining)")
         chal_serv_nomod(parent,
                         ref,
                         field, # Apply actions to field
-                        num - (n_acts |> Enum.count(fn x -> elem(x, 0) == :flag end)), # Remove new mine explorations
+                        num_rem,
                         n_acts ++ acts,
                         proc_limit,
                         verbose) 
       end
     else # Game loss on unsafe move
-      if verbose, do: IO.inspect("Explored Bomb")
+      if verbose, do: IO.puts("Explored Bomb")
       send(parent, :failure)
     end
   end

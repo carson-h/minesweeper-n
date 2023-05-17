@@ -168,10 +168,26 @@ defmodule MsprSolve do
     # Total number of arrangements
     case Enum.reduce(sols, 0, fn x, acc -> combination(empty, num-length(x)) + acc end) do
       0 -> {[], 0}
-      total -> {prob(sols, empty, num, perim, [])
-                  |> Enum.map(fn x -> x / total end)
-                  |> Enum.zip(perim)
-                  |> Enum.sort_by(fn x -> elem(x, 0) end),
+      total -> {cond do
+                  proc_limit < 1 -> perim
+                                      |> Stream.map(fn h -> {(sols
+                                                            |> Stream.filter(fn x -> h in x end)
+                                                            |> Enum.reduce(0, fn x, acc -> combination(empty, num-length(x)) + acc end))
+                                                            / total,
+                                                        h}
+                                                    end)
+                  true -> perim
+                            |> Task.async_stream(fn h -> {(sols
+                                                            |> Stream.filter(fn x -> h in x end)
+                                                            |> Enum.reduce(0, fn x, acc -> combination(empty, num-length(x)) + acc end))
+                                                            / total,
+                                                        h}
+                                                end,
+                                                ordered: false,
+                                                )
+                            |> Stream.map(fn {:ok, x} -> x end)
+                  end
+                    |> Enum.sort_by(fn x -> elem(x, 0) end),
                 exp_ext/total}
     end
   end
