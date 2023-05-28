@@ -54,7 +54,7 @@ defmodule MsprSolve do
   defp stsearch_loop(_, _, [], res), do: res
   defp stsearch_loop(field, proc_limit, act, res) do
     new_field = write_acts(field, act)
-    stsearch_loop(new_field, proc_limit, stsearch(new_field, proc_limit), (res ++ act) |> Enum.sort |> Enum.dedup)
+    stsearch_loop(new_field, proc_limit, stsearch(new_field, proc_limit), (res ++ act) |> Enum.uniq)
   end
 
   @doc """
@@ -92,8 +92,7 @@ defmodule MsprSolve do
                           |> Stream.map(fn {:ok, x} -> x end)
     end
       |> Stream.flat_map(fn {mark, pos} -> mark_surr(field, pos, mark) end)
-      |> Enum.sort
-      |> Enum.dedup
+      |> Enum.uniq
   end
 
   @doc """
@@ -201,15 +200,6 @@ defmodule MsprSolve do
                 exp_ext/total}
     end
   end
-  defp prob(_, _, _, [], res), do: Enum.reverse(res)
-  defp prob(sols, empty, num, [h | tperim], res) do
-    prob(sols,
-         empty,
-         num,
-         tperim,
-         [sols |> Enum.filter(fn x -> h in x end)
-               |> Enum.reduce(0, fn x, acc -> combination(empty, num-length(x)) + acc end) | res])
-  end
 
   @doc """ 
   Generate possible solutions.
@@ -235,7 +225,7 @@ defmodule MsprSolve do
       n_perim = Enum.filter(perim, fn x -> x not in used_pos end)
       if n_perim == [] do  # Valid solution, return list of bomb positions
         if field |> write_acts(n_acts) |> valid_board_strict? do
-          send(parent, [n_acts |> Enum.filter(fn x -> elem(x, 0) == :flag end) |> Enum.map(fn x -> elem(x, 1) end) |> Enum.sort ])
+          send(parent, [n_acts |> Stream.filter(fn x -> elem(x, 0) == :flag end) |> Stream.map(fn x -> elem(x, 1) end) |> Enum.sort ])
         else
           send(parent, [[:error]])
         end
