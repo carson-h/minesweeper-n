@@ -16,7 +16,7 @@ defmodule MsprSolve do
   Returns a list of actions to be applied.
   """
   def solve(field, num, proc_limit \\ -1) do
-    st = stsearch_loop(field)
+    st = stsearch_loop(field, proc_limit)
     if st == [] do
       co = cosearch(field, num)
       if co == [] do
@@ -50,11 +50,11 @@ defmodule MsprSolve do
 
   Returns a list of actions to be applied.
   """
-  def stsearch_loop(field), do: stsearch_loop(field, stsearch(field), [])
-  defp stsearch_loop(_, [], res), do: res
-  defp stsearch_loop(field, act, res) do
+  def stsearch_loop(field, proc_limit \\ -1), do: stsearch_loop(field, proc_limit, stsearch(field, proc_limit), [])
+  defp stsearch_loop(_, _, [], res), do: res
+  defp stsearch_loop(field, proc_limit, act, res) do
     new_field = write_acts(field, act)
-    stsearch_loop(new_field, stsearch(new_field), (res ++ act) |> Enum.sort |> Enum.dedup)
+    stsearch_loop(new_field, proc_limit, stsearch(new_field, proc_limit), (res ++ act) |> Enum.sort |> Enum.dedup)
   end
 
   @doc """
@@ -79,12 +79,21 @@ defmodule MsprSolve do
 
   Returns a list of actions to be applied.
   """
-  def stsearch(field) do
+  def stsearch(field, proc_limit \\ -1) do
     perm_list = all_perms(field)
-    perm_list |> Stream.map(fn x -> {check(field, x), x} end)
-              |> Stream.flat_map(fn {mark, pos} -> mark_surr(field, pos, mark) end)
-              |> Enum.sort
-              |> Enum.dedup
+    cond do
+      proc_limit < 1 -> perm_list
+                          |> Stream.map(fn x -> {check(field, x), x} end)
+      true           -> perm_list
+                          |> Task.async_stream(fn x -> {check(field, x), x} end,
+                                               ordered: false,
+                                               max_concurrency: proc_limit,
+                                               timeout: :infinity)
+                          |> Stream.map(fn {:ok, x} -> x end)
+    end
+      |> Stream.flat_map(fn {mark, pos} -> mark_surr(field, pos, mark) end)
+      |> Enum.sort
+      |> Enum.dedup
   end
 
   @doc """
@@ -184,7 +193,8 @@ defmodule MsprSolve do
                                                         h}
                                                 end,
                                                 ordered: false,
-                                                )
+                                                max_concurrency: proc_limit,
+                                                timeout: :infinity)
                             |> Stream.map(fn {:ok, x} -> x end)
                   end
                     |> Enum.sort_by(fn x -> elem(x, 0) end),
