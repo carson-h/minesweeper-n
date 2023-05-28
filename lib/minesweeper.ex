@@ -6,7 +6,7 @@ defmodule Minesweeper do
   import MsprSolve
 
   @doc """
-  Testing service for Minesweeper solver [concurrent testing].
+  Testing service for Minesweeper solver.
 
   `dim` is a tuple representing the dimensions of the boards to be tested.
   `num` is the number of mines to be placed on the board.
@@ -15,16 +15,13 @@ defmodule Minesweeper do
 
   Returns a tuple of the form {wins, losses}.
   """
-  def test_solve(dim, num, count, verbose) do
-    pid = self() # Identify current process ID (pid)
-    for _ <- 1..count, do: spawn(fn -> chal_serv(pid, dim, num, verbose) end)
-    test_solve(count, {0, 0}) # Begin receiving results
-  end
-  defp test_solve(0, res), do: res # Return results when all are collected
-  defp test_solve(count, {s, f}) do
-    receive do
-      :success -> test_solve(count-1, {s+1, f})
-      :failure -> test_solve(count-1, {s, f+1})
+  def test_solve(dim, num, count, proc_limit \\ -1, verbose \\ false), do: test_solve(dim, num, count, {0, 0}, proc_limit, verbose)
+  defp test_solve(_, _, 0, res, _, _), do: res # Return result when all tests completed.
+  defp test_solve(dim, num, count, {win, loss}, proc_limit, verbose) do
+    chal_serv_nomod(self(), dim, num, proc_limit, verbose) # Run challenge
+    receive do # Update results, and proceed with testing
+      :success -> test_solve(dim, num, count-1, {win+1, loss}, proc_limit, verbose)
+      :failure -> test_solve(dim, num, count-1, {win, loss+1}, proc_limit, verbose)
     end
   end
 
@@ -67,26 +64,6 @@ defmodule Minesweeper do
     else # Game loss on unsafe move
       if verbose, do: IO.inspect("Explored Bomb")
       send(parent, :failure)
-    end
-  end
-
-  @doc """
-  Testing service for Minesweeper solver [sequential testing].
-
-  `dim` is a tuple representing the dimensions of the boards to be tested.
-  `num` is the number of mines to be placed on the board.
-  `count` is the number of times to repeat this test.
-  `verbose` determines whether to print the results of the tests to console.
-
-  Returns a tuple of the form {wins, losses}.
-  """
-  def test_solve_seq(dim, num, count, proc_limit \\ -1, verbose \\ false), do: test_solve_seq(dim, num, count, {0, 0}, proc_limit, verbose)
-  defp test_solve_seq(_, _, 0, res, _, _), do: res # Return result when all tests completed.
-  defp test_solve_seq(dim, num, count, {win, loss}, proc_limit, verbose) do
-    chal_serv_nomod(self(), dim, num, proc_limit, verbose) # Run challenge
-    receive do # Update results, and proceed with testing
-      :success -> test_solve_seq(dim, num, count-1, {win+1, loss}, proc_limit, verbose)
-      :failure -> test_solve_seq(dim, num, count-1, {win, loss+1}, proc_limit, verbose)
     end
   end
 
